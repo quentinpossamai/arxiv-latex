@@ -52,8 +52,22 @@ async def handle_list_tools() -> list[types.Tool]:
     """List available tools."""
     return [
         types.Tool(
-            name="get_paper_prompt",
-            description="Get a flattened LaTeX code of a paper from arXiv ID for precise interpretation of mathematical expressions",
+            name="get_full_source",
+            description="Get the whole LaTeX source of a paper from arXiv ID. Highest level of detail.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "arxiv_id": {
+                        "type": "string",
+                        "description": "The arXiv ID of the paper (e.g., '2403.12345')",
+                    }
+                },
+                "required": ["arxiv_id"],
+            },
+        ),
+        types.Tool(
+            name="get_all_sections",
+            description="Get all aggregated sections of a paper from arXiv ID (smaller content than the full source), useful to have a global compact view.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -67,7 +81,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_paper_abstract",
-            description="Get just the abstract of an arXiv paper (faster and cheaper than fetching the full paper)",
+            description="Get only the abstract of an arXiv paper (faster and cheaper than fetching the full paper)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -132,12 +146,20 @@ async def handle_call_tool(
     arxiv_id = arguments["arxiv_id"]
 
     try:
-        if name == "get_paper_prompt":
+        if name == "get_full_source":
             await mcp_log("info", f"Processing arXiv paper: {arxiv_id}")
             prompt = process_latex_source(arxiv_id)
             result = prompt + LATEX_RENDER_INSTRUCTIONS
             await mcp_log("info", f"Successfully processed arXiv paper: {arxiv_id}")
-
+        elif name == "get_all_sections":
+            await mcp_log("info", f"Getting all sections for arXiv paper: {arxiv_id}")
+            text = process_latex_source(arxiv_id)
+            sections = list_sections(text)
+            agg = []
+            for section in sections:
+                agg.append(extract_section(text, section))
+            result = "\n\n".join(agg) + LATEX_RENDER_INSTRUCTIONS
+            await mcp_log("info", f"Successfully got all sections for: {arxiv_id}")
         elif name == "get_paper_abstract":
             await mcp_log("info", f"Getting abstract for arXiv paper: {arxiv_id}")
             result = process_latex_source(arxiv_id, abstract_only=True)
